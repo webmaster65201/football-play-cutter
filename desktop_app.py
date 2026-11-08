@@ -11,6 +11,7 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from play_cutter import analyze, candidates, write_csv, export
+from odk_suggest import suggest_odk
 
 FIELDS=('clip','start_seconds','end_seconds','include','odk','notes')
 
@@ -24,14 +25,19 @@ class App(tk.Tk):
         self.busy=False
         self.mode=tk.StringVar(value='review')
         self.scouting_team=tk.StringVar(value='Southside')
+        self.attack_direction=tk.StringVar(value='unknown')
         self.status=tk.StringVar(value='Select one or more recordings to begin.')
         root=ttk.Frame(self,padding=14);root.pack(fill='both',expand=True)
         ttk.Label(root,text='Football Play Cutter',font=('Arial',20,'bold')).pack(anchor='w')
-        ttk.Label(root,text='Experimental motion-based play candidates. ODK is manual until possession can be verified.').pack(anchor='w',pady=(0,10))
+        ttk.Label(root,text='Experimental motion-based play detection. ODK suggestions are low-confidence and must be reviewed.').pack(anchor='w',pady=(0,10))
         teamrow=ttk.Frame(root);teamrow.pack(fill='x',pady=(0,5))
         ttk.Label(teamrow,text='Scouting team:').pack(side='left',padx=(0,8))
         ttk.Entry(teamrow,textvariable=self.scouting_team,width=28).pack(side='left')
-        ttk.Label(teamrow,text='  Jerseys/helmets: unknown  |  ODK: O=team offense, D=team defense, K=special teams').pack(side='left')
+        ttk.Label(teamrow,text='  Southside: WHITE  |  Opponent: BLUE  |  Helmet: unknown').pack(side='left')
+        dirrow=ttk.Frame(root);dirrow.pack(fill='x',pady=(0,5))
+        ttk.Label(dirrow,text='Southside attacking direction (for this segment):').pack(side='left')
+        ttk.Combobox(dirrow,textvariable=self.attack_direction,values=['unknown','left','right'],state='readonly',width=12).pack(side='left',padx=8)
+        ttk.Label(dirrow,text='Unknown leaves ODK as ?; change direction when possession/quarters switch.').pack(side='left')
         bar=ttk.Frame(root);bar.pack(fill='x',pady=4)
         ttk.Button(bar,text='Add videos (MP4/MOV)',command=self.add_videos).pack(side='left',padx=3)
         ttk.Button(bar,text='Remove selected',command=self.remove_video).pack(side='left',padx=3)
@@ -54,7 +60,7 @@ class App(tk.Tk):
         scroll=ttk.Scrollbar(area,orient='vertical',command=self.tree.yview);scroll.pack(side='right',fill='y');self.tree.configure(yscrollcommand=scroll.set)
         self.tree.bind('<Double-1>',self.edit_cell)
         buttons=ttk.Frame(root);buttons.pack(fill='x',pady=5)
-        for title,fn in [('Preview selected clip',self.preview),('Add clip',self.add_clip),('Delete clip',self.delete_clip),('Save edits',self.save),('Export reviewed clips',self.export_reviewed)]:
+        for title,fn in [('Preview selected clip',self.preview),('Add clip',self.add_clip),('Delete clip',self.delete_clip),('Save edits',self.save),('Suggest ODK',self.suggest_odk),('Export reviewed clips',self.export_reviewed)]:
             ttk.Button(buttons,text=title,command=fn).pack(side='left',padx=3)
         ttk.Label(root,textvariable=self.status,wraplength=990).pack(anchor='w',pady=8)
 
@@ -134,6 +140,42 @@ class App(tk.Tk):
             self.select_video()
             self.status.set('Finished. '+' | '.join(report)+(' — MP4 clips exported.' if mode=='auto' else ' — review/edit candidates, then click Export reviewed clips.'))
         self.background('Starting analysis...',work,done)
+
+    def suggest_odk(self):
+        if not self.current or not self.tree.get_children():
+            messagebox.showinfo('No clips','Detect or load clips first.');return
+        if self.attack_direction.get()=='unknown':
+            messagebox.showinfo('Direction required',
+                'Select the direction Southside is attacking for these clips (left or right). '
+                'If the direction changes, process those clips separately. '
+                'Without direction, leave ODK as ? and label manually.')
+            return
+        video=self.current
+        items=list(self.tree.get_children())
+        direction=self.attack_direction.get()
+        def work():
+            results=[]
+            for item in items:
+                row=self.tree.item(item,'values')
+                if str(row[4]).upper() in ('O','D','K'):
+                    results.append((item,None,None));continue  # never overwrite manually set ODK
+                label,reason=suggest_odk(video,float(row[1]),float(row[2]),direction)
+                results.append((item,label,reason))
+            return results
+        def done(results):
+            suggested=0
+            for item,label,reason in results:
+                if label is None:continue
+                row=list(self.tree.item(item,'values'))
+                row[4]=label
+                row[5]=reason
+                self.tree.item(item,values=row)
+                suggested+=label in ('O','D')
+            self.status.set(f'{suggested} tentative O/D suggestions; review EVERY play, correct errors, then Save edits. K remains manual.')
+            messagebox.showinfo('ODK suggestions',
+                f'{suggested} low-confidence O/D suggestions. These are NOT verified. '
+                'Review every clip and assign K manually for special teams. Save edits when finished.')
+        self.background('Analyzing jersey-color layout...',work,done)
 
     def export_reviewed(self):
         if not self.current:return

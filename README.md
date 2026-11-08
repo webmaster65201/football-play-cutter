@@ -1,21 +1,21 @@
-# Football Play Cutter V3 — Apple Silicon Mac build kit
+# Football Play Cutter V4 — Apple Silicon Mac
 
-This update preserves the V2 motion-based candidate cutter and adds **scouting-team-relative ODK labeling**. Default team: Southside. Jersey and helmet colors: unknown.
+This is a **build kit**, not a precompiled `.app`. Upload `desktop_app.py`, `play_cutter.py`, `odk_suggest.py`, `requirements.txt`, and `README.md` to the root of your existing GitHub repository, replacing prior versions. Retain the `.github/workflows/build-mac.yml` workflow from V3 (included here as a backup). Run **Actions → Build Mac App** and download the Apple Silicon artifact. Quit V3 before replacing the application.
 
-## What works
-- Detect and review motion-based candidate clips, or auto-export them.
-- In Review First mode, double-click the **ODK** cell and choose O (scouting team offense), D (scouting team defense), K (special teams), or ? (not classified).
-- Save edits. The video-adjacent `*_candidates.csv` contains ODK values and can be used as a starting point for a scouting breakdown. MP4 clips export as before.
-- Existing V2 CSV files load with `?` in ODK. **Back up your CSV before running detection again**, which overwrites candidate rows.
+## ODK prototype
 
-## Important limitation
-**Automatic ODK recognition is NOT implemented in this version.** Without known jersey colors, verified possession, and labeled sample plays, inferring O/D/K would be guesswork. The program intentionally uses `?` instead of inventing a label. This is a real, editable ODK workflow, not a trained football classifier. The exported CSV is not claimed to match Hudl's proprietary import format.
+- Scouting team: **Southside**, **white** jerseys; opponent: **blue**; helmet unknown.
+- O means Southside offense; D means Southside defense; K means special teams.
+- After detecting plays in **Review First**, choose the direction **Southside attacks** on the screen (left/right), then click **Suggest ODK**.
+- The software uses coarse jersey-color position and field geometry to suggest **O/D**. These suggestions are **low confidence** and **must be manually verified**. It does not automatically recognize snaps, possession, or special teams. Uncertain clips stay `?`; assign `K` manually.
+- The direction can change during the game. **Do not run suggestions across segments with different attacking directions**. If uncertain, keep direction Unknown and label manually.
+- Existing manually labeled ODK values are never overwritten by Suggest ODK. Click **Save edits** before export.
+- This prototype is not a trained football classifier and may misclassify many plays, especially wide broadcast angles or shots without clear jersey visibility.
 
-## Update existing GitHub repository (no Terminal on your Mac)
-1. Open your private `football-play-cutter` GitHub repository.
-2. Replace the existing `desktop_app.py`, `play_cutter.py`, and `README.md` with these V3 files using GitHub's browser upload or edit tools. `requirements.txt` and `.github/workflows/build-mac.yml` can remain unchanged.
-3. Commit changes to `main`. In Actions, open **Build Mac App** and run the workflow if it did not start automatically.
-4. When the build is green, download the **Football-Play-Cutter-Apple-Silicon** artifact. Extract both ZIP layers if needed, and move the new `.app` to Applications, replacing the old one after quitting it.
-5. Load the five-minute test video, choose Review First, and check the ODK dropdown.
+## Installation
 
-The build runs on GitHub's macOS runner and bundles Python dependencies. No Python or Terminal is needed for normal application use. The new Mac build still needs to be tested on your computer.
+GitHub builds the standalone Mac app; you do not need Python or Terminal for everyday use. The workflow bundles Python dependencies. Mac Gatekeeper may require user approval for an unsigned app.
+
+## Safety
+
+Keep original footage and your V3 app as backup. The detection and ODK features are experimental. Verify all clips before using ODK in scouting reports.
