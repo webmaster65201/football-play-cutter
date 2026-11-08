@@ -1,0 +1,33 @@
+name: Build Mac App
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+jobs:
+  mac-app:
+    strategy:
+      matrix:
+        include:
+          - runner: macos-15-intel
+            label: Intel
+          - runner: macos-15
+            label: Apple-Silicon
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Build standalone app
+        run: |
+          python -m PyInstaller --noconfirm --clean --windowed --onedir --name "Football Play Cutter" --collect-all imageio_ffmpeg --collect-all cv2 --collect-all numpy desktop_app.py
+      - name: Zip app
+        run: |
+          cd dist
+          ditto -c -k --sequesterRsrc --keepParent "Football Play Cutter.app" "Football-Play-Cutter-${{ matrix.label }}.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Football-Play-Cutter-${{ matrix.label }}
+          path: dist/Football-Play-Cutter-${{ matrix.label }}.zip
