@@ -18,26 +18,37 @@ FIELDS=('clip','start_seconds','end_seconds','include','odk','notes')
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title('Football Play Cutter — Mac')
-        self.geometry('1040x670')
+        self.title('Football Play Cutter V5.1 — Mac')
+        self.geometry('1100x780')
         self.videos=[]
         self.current=None
         self.busy=False
         self.mode=tk.StringVar(value='review')
-        self.scouting_team=tk.StringVar(value='Southside')
+        self.home_team=tk.StringVar(value='')
+        self.away_team=tk.StringVar(value='')
+        self.home_color=tk.StringVar(value='Select color')
+        self.away_color=tk.StringVar(value='Select color')
+        self.scout_side=tk.StringVar(value='Home')
+        self.scouting_team=tk.StringVar(value='')
         self.attack_direction=tk.StringVar(value='unknown')
         self.status=tk.StringVar(value='Select one or more recordings to begin.')
         root=ttk.Frame(self,padding=14);root.pack(fill='both',expand=True)
         ttk.Label(root,text='Football Play Cutter',font=('Arial',20,'bold')).pack(anchor='w')
         ttk.Label(root,text='Experimental motion-based play detection. ODK suggestions are low-confidence and must be reviewed.').pack(anchor='w',pady=(0,10))
-        teamrow=ttk.Frame(root);teamrow.pack(fill='x',pady=(0,5))
-        ttk.Label(teamrow,text='Scouting team:').pack(side='left',padx=(0,8))
-        ttk.Entry(teamrow,textvariable=self.scouting_team,width=28).pack(side='left')
-        ttk.Label(teamrow,text='  Southside: WHITE  |  Opponent: BLUE  |  Helmet: unknown').pack(side='left')
-        dirrow=ttk.Frame(root);dirrow.pack(fill='x',pady=(0,5))
-        ttk.Label(dirrow,text='Southside attacking direction (for this segment):').pack(side='left')
-        ttk.Combobox(dirrow,textvariable=self.attack_direction,values=['unknown','left','right'],state='readonly',width=12).pack(side='left',padx=8)
-        ttk.Label(dirrow,text='Unknown leaves ODK as ?; change direction when possession/quarters switch.').pack(side='left')
+        game=ttk.LabelFrame(root,text='Game Setup — teams and jersey colors',padding=8);game.pack(fill='x',pady=(0,5))
+        colors=['Select color','White','Off-white / Cream','Black','Gray / Silver','Royal Blue','Blue','Navy Blue','Light Blue','Sky Blue','Red','Maroon / Burgundy','Green','Dark Green','Kelly Green','Lime Green','Yellow','Gold','Orange','Purple','Violet','Pink','Brown','Teal','Turquoise','Other / Unknown']
+        for side,name,color in [('Home',self.home_team,self.home_color),('Away',self.away_team,self.away_color)]:
+            line=ttk.Frame(game);line.pack(fill='x',pady=2)
+            ttk.Label(line,text=side+' team:',width=13).pack(side='left')
+            ttk.Entry(line,textvariable=name,width=28).pack(side='left',padx=(0,12))
+            ttk.Label(line,text='Jersey:').pack(side='left')
+            ttk.Combobox(line,textvariable=color,values=colors,state='readonly',width=22).pack(side='left',padx=6)
+        line=ttk.Frame(game);line.pack(fill='x',pady=2)
+        ttk.Label(line,text='Scouting:',width=13).pack(side='left')
+        ttk.Combobox(line,textvariable=self.scout_side,values=['Home','Away'],state='readonly',width=12).pack(side='left')
+        ttk.Label(line,text='  Scouting team attack direction (for this segment):').pack(side='left')
+        ttk.Combobox(line,textvariable=self.attack_direction,values=['unknown','left','right'],state='readonly',width=12).pack(side='left',padx=6)
+        ttk.Label(game,text='Enter both teams for each game. ODK follows the scouting side. Colors alone cannot establish possession.').pack(anchor='w')
         bar=ttk.Frame(root);bar.pack(fill='x',pady=4)
         ttk.Button(bar,text='Add videos (MP4/MOV)',command=self.add_videos).pack(side='left',padx=3)
         ttk.Button(bar,text='Remove selected',command=self.remove_video).pack(side='left',padx=3)
@@ -121,6 +132,8 @@ class App(tk.Tk):
     def run_mode(self):
         if not self.videos:messagebox.showwarning('No video','Add a recording first.');return
         videos=list(self.videos);mode=self.mode.get()
+        scout_name=self.home_team.get().strip() if self.scout_side.get()=='Home' else self.away_team.get().strip()
+        if not scout_name:messagebox.showwarning('Game setup','Enter a name for the scouting team.');return
         existing=[v.name for v in videos if self.csv_path(v).exists()]
         if existing and not messagebox.askyesno('Overwrite existing edits?',f'Detection will replace saved candidate lists for {len(existing)} video(s). Continue?'):return
         if mode=='auto' and not messagebox.askyesno('Automatic export', 'Export all detected motion segments without reviewing them? These may not be complete plays.'):return
@@ -130,7 +143,7 @@ class App(tk.Tk):
                 self.after(0,lambda v=video,i=i:self.status.set(f'Analyzing {i}/{len(videos)}: {v.name}'))
                 duration,samples=analyze(video)
                 spans=candidates(samples)
-                write_csv(self.csv_path(video),spans,duration,scouting_team=self.scouting_team.get().strip() or 'Southside')
+                write_csv(self.csv_path(video),spans,duration,scouting_team=scout_name)
                 if mode=='auto' and spans:
                     self.after(0,lambda v=video:self.status.set(f'Exporting: {v.name}'))
                     export(video,self.csv_path(video),self.out_path(video))
@@ -146,10 +159,14 @@ class App(tk.Tk):
             messagebox.showinfo('No clips','Detect or load clips first.');return
         if self.attack_direction.get()=='unknown':
             messagebox.showinfo('Direction required',
-                'Select the direction Southside is attacking for these clips (left or right). '
+                'Select the direction your scouting team is attacking for these clips (left or right). '
                 'If the direction changes, process those clips separately. '
                 'Without direction, leave ODK as ? and label manually.')
             return
+        scout_color=self.home_color.get() if self.scout_side.get()=='Home' else self.away_color.get()
+        opponent_color=self.away_color.get() if self.scout_side.get()=='Home' else self.home_color.get()
+        if scout_color.lower() not in ('white','blue') or opponent_color.lower() not in ('white','blue') or scout_color==opponent_color:
+            messagebox.showinfo('ODK color support', 'This experimental suggestion engine currently supports one White team and one Blue team. Other color combinations remain manual (?); no guesses will be made.');return
         video=self.current
         items=list(self.tree.get_children())
         direction=self.attack_direction.get()
@@ -160,6 +177,9 @@ class App(tk.Tk):
                 if str(row[4]).upper() in ('O','D','K'):
                     results.append((item,None,None));continue  # never overwrite manually set ODK
                 label,reason=suggest_odk(video,float(row[1]),float(row[2]),direction)
+                if scout_color.lower()=='blue' and label in ('O','D'):
+                    label='D' if label=='O' else 'O'
+                reason=f'{self.scout_side.get()} scouting team ({scout_color}) vs opponent ({opponent_color}). '+reason
                 results.append((item,label,reason))
             return results
         def done(results):
