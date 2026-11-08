@@ -12,7 +12,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from play_cutter import analyze, candidates, write_csv, export
 
-FIELDS=('clip','start_seconds','end_seconds','include','notes')
+FIELDS=('clip','start_seconds','end_seconds','include','odk','notes')
 
 class App(tk.Tk):
     def __init__(self):
@@ -23,10 +23,15 @@ class App(tk.Tk):
         self.current=None
         self.busy=False
         self.mode=tk.StringVar(value='review')
+        self.scouting_team=tk.StringVar(value='Southside')
         self.status=tk.StringVar(value='Select one or more recordings to begin.')
         root=ttk.Frame(self,padding=14);root.pack(fill='both',expand=True)
         ttk.Label(root,text='Football Play Cutter',font=('Arial',20,'bold')).pack(anchor='w')
-        ttk.Label(root,text='Experimental motion-based play candidates — not guaranteed snap detection.').pack(anchor='w',pady=(0,10))
+        ttk.Label(root,text='Experimental motion-based play candidates. ODK is manual until possession can be verified.').pack(anchor='w',pady=(0,10))
+        teamrow=ttk.Frame(root);teamrow.pack(fill='x',pady=(0,5))
+        ttk.Label(teamrow,text='Scouting team:').pack(side='left',padx=(0,8))
+        ttk.Entry(teamrow,textvariable=self.scouting_team,width=28).pack(side='left')
+        ttk.Label(teamrow,text='  Jerseys/helmets: unknown  |  ODK: O=team offense, D=team defense, K=special teams').pack(side='left')
         bar=ttk.Frame(root);bar.pack(fill='x',pady=4)
         ttk.Button(bar,text='Add videos (MP4/MOV)',command=self.add_videos).pack(side='left',padx=3)
         ttk.Button(bar,text='Remove selected',command=self.remove_video).pack(side='left',padx=3)
@@ -40,10 +45,10 @@ class App(tk.Tk):
         self.queue=tk.Listbox(qframe,height=4,exportselection=False);self.queue.pack(side='left',fill='x',expand=True)
         self.queue.bind('<<ListboxSelect>>',self.select_video)
         ttk.Scrollbar(qframe,orient='vertical',command=self.queue.yview).pack(side='right',fill='y')
-        ttk.Label(root,text='Double-click Start/End to edit seconds. Set Include to yes/no. Save before export.').pack(anchor='w',pady=(8,0))
+        ttk.Label(root,text='Double-click ODK to choose O, D, K, or ? (unclassified). Save before export.').pack(anchor='w',pady=(8,0))
         area=ttk.Frame(root);area.pack(fill='both',expand=True,pady=5)
         self.tree=ttk.Treeview(area,columns=FIELDS,show='headings',selectmode='browse')
-        for key,width in zip(FIELDS,(140,115,115,85,470)):
+        for key,width in zip(FIELDS,(125,100,100,70,65,410)):
             self.tree.heading(key,text=key.replace('_',' ').title());self.tree.column(key,width=width,stretch=(key=='notes'))
         self.tree.pack(side='left',fill='both',expand=True)
         scroll=ttk.Scrollbar(area,orient='vertical',command=self.tree.yview);scroll.pack(side='right',fill='y');self.tree.configure(yscrollcommand=scroll.set)
@@ -77,7 +82,7 @@ class App(tk.Tk):
         self.current=self.videos[idx[0]];self.clear()
         if self.csv_path(self.current).exists():
             with self.csv_path(self.current).open(newline='',encoding='utf-8') as f:
-                for row in csv.DictReader(f):self.tree.insert('','end',values=[row.get(k,'') for k in FIELDS])
+                for row in csv.DictReader(f):self.tree.insert('','end',values=[row.get(k,'?') if k=='odk' else row.get(k,'') for k in FIELDS])
         self.status.set(f'{self.current.name}: {len(self.tree.get_children())} saved candidates.')
 
     def save(self):
@@ -86,10 +91,11 @@ class App(tk.Tk):
         try:
             for row in rows:
                 if float(row[1])<0 or float(row[2])<=float(row[1]):raise ValueError('Each clip must have a nonnegative start and an end after its start.')
+                if str(row[4]).strip().upper() not in ('O','D','K','?'):raise ValueError('ODK must be O, D, K, or ?.')
             with self.csv_path(self.current).open('w',newline='',encoding='utf-8') as f:
                 writer=csv.writer(f);writer.writerow(FIELDS);writer.writerows(rows)
         except (ValueError,OSError) as exc:messagebox.showerror('Save failed',str(exc));return False
-        self.status.set(f'Saved {len(rows)} clips for {self.current.name}')
+        self.status.set(f'Saved {len(rows)} clips for {self.current.name} — ODK CSV ready; ? means not classified.')
         return True
 
     def background(self,label,work,done):
@@ -118,7 +124,7 @@ class App(tk.Tk):
                 self.after(0,lambda v=video,i=i:self.status.set(f'Analyzing {i}/{len(videos)}: {v.name}'))
                 duration,samples=analyze(video)
                 spans=candidates(samples)
-                write_csv(self.csv_path(video),spans,duration)
+                write_csv(self.csv_path(video),spans,duration,scouting_team=self.scouting_team.get().strip() or 'Southside')
                 if mode=='auto' and spans:
                     self.after(0,lambda v=video:self.status.set(f'Exporting: {v.name}'))
                     export(video,self.csv_path(video),self.out_path(video))
@@ -138,7 +144,7 @@ class App(tk.Tk):
 
     def add_clip(self):
         n=len(self.tree.get_children())+1
-        self.tree.insert('','end',values=(f'play_{n:04d}','0','10','yes','MANUAL: adjust timestamps'))
+        self.tree.insert('','end',values=(f'play_{n:04d}','0','10','yes','?','MANUAL: adjust timestamps'))
     def delete_clip(self):
         for item in self.tree.selection():self.tree.delete(item)
 
@@ -148,6 +154,15 @@ class App(tk.Tk):
         idx=int(col[1:])-1;bbox=self.tree.bbox(item,col)
         if not bbox:return
         original=list(self.tree.item(item,'values'))
+        if idx==4:
+            chooser=ttk.Combobox(self.tree,values=['?','O','D','K'],state='readonly')
+            chooser.set(original[idx]);chooser.place(x=bbox[0],y=bbox[1],width=bbox[2],height=bbox[3]);chooser.focus_set()
+            def pick(_=None):
+                if not chooser.winfo_exists():return
+                values=list(self.tree.item(item,'values'));values[idx]=chooser.get();self.tree.item(item,values=values);chooser.destroy()
+            chooser.bind('<<ComboboxSelected>>',pick)
+            chooser.bind('<FocusOut>',lambda _:chooser.destroy() if chooser.winfo_exists() else None)
+            return
         entry=ttk.Entry(self.tree);entry.insert(0,original[idx]);entry.select_range(0,'end')
         entry.place(x=bbox[0],y=bbox[1],width=bbox[2],height=bbox[3]);entry.focus_set()
         def commit(_=None):

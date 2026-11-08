@@ -1,23 +1,21 @@
-# Football Play Cutter — Mac standalone build kit
+# Football Play Cutter V3 — Apple Silicon Mac build kit
 
-This package is **source and automated build instructions**, not yet a built Mac app. It creates a double-clickable `.app` with Python and FFmpeg bundled. No Python, Terminal, or FFmpeg is needed on the Mac *after the app is built*. It has not yet been built or tested on a physical Mac.
+This update preserves the V2 motion-based candidate cutter and adds **scouting-team-relative ODK labeling**. Default team: Southside. Jersey and helmet colors: unknown.
 
-## Build using a browser (GitHub Actions)
+## What works
+- Detect and review motion-based candidate clips, or auto-export them.
+- In Review First mode, double-click the **ODK** cell and choose O (scouting team offense), D (scouting team defense), K (special teams), or ? (not classified).
+- Save edits. The video-adjacent `*_candidates.csv` contains ODK values and can be used as a starting point for a scouting breakdown. MP4 clips export as before.
+- Existing V2 CSV files load with `?` in ODK. **Back up your CSV before running detection again**, which overwrites candidate rows.
 
-1. Sign in to GitHub and create a **private** repository (e.g. `football-play-cutter`).
-2. Upload `desktop_app.py`, `play_cutter.py`, `requirements.txt`, and the `.github/workflows/build-mac.yml` file, preserving the folder structure. GitHub's browser upload interface may hide dotfolders; if so, create `.github/workflows/build-mac.yml` through **Add file → Create new file** and paste its content.
-3. Open **Actions → Build Mac App → Run workflow**. It may also start automatically on the first push to `main`.
-4. After the job finishes, open the run, download the **Intel** or **Apple-Silicon** artifact, and unzip it. Inside is a ZIP containing `Football Play Cutter.app`.
-5. Move the `.app` to Applications. Open it via Finder. As this is **not signed or notarized**, macOS may block the first launch. If you trust your own build, go to **System Settings → Privacy & Security → Open Anyway** after the blocked attempt. Never disable Gatekeeper globally.
+## Important limitation
+**Automatic ODK recognition is NOT implemented in this version.** Without known jersey colors, verified possession, and labeled sample plays, inferring O/D/K would be guesswork. The program intentionally uses `?` instead of inventing a label. This is a real, editable ODK workflow, not a trained football classifier. The exported CSV is not claimed to match Hudl's proprietary import format.
 
-**Which download?** Apple Silicon for M1/M2/M3/M4/M5 Macs; Intel for Intel-based Macs. Use Apple menu → About This Mac to check.
+## Update existing GitHub repository (no Terminal on your Mac)
+1. Open your private `football-play-cutter` GitHub repository.
+2. Replace the existing `desktop_app.py`, `play_cutter.py`, and `README.md` with these V3 files using GitHub's browser upload or edit tools. `requirements.txt` and `.github/workflows/build-mac.yml` can remain unchanged.
+3. Commit changes to `main`. In Actions, open **Build Mac App** and run the workflow if it did not start automatically.
+4. When the build is green, download the **Football-Play-Cutter-Apple-Silicon** artifact. Extract both ZIP layers if needed, and move the new `.app` to Applications, replacing the old one after quitting it.
+5. Load the five-minute test video, choose Review First, and check the ODK dropdown.
 
-**Caveats:** GitHub Actions runner labels and hosted-runner availability may change; the builds can fail, and an unsigned app can trigger security prompts. GitHub Actions usage limits may apply. The software's detector is experimental: it identifies motion segments, not verified snaps. Preserve the original game footage. Only process recordings you have permission to use.
-
-## Everyday use
-
-Open the app, select video(s), choose **Review first** or **Automatic**, and click **Run selected mode**. Review first allows editing candidate start/end times, previewing in the Mac's default video player, and exporting selected clips. Automatic exports all detected candidate segments. Output appears alongside the video. Processing long videos can take time and disk space.
-
-## Notes for future distribution
-
-For smooth sharing with other Mac users, a developer should codesign and notarize the `.app` with an Apple Developer ID. This build is meant for personal testing and is not notarized.
+The build runs on GitHub's macOS runner and bundles Python dependencies. No Python or Terminal is needed for normal application use. The new Mac build still needs to be tested on your computer.

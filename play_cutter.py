@@ -56,10 +56,10 @@ def candidates(samples, min_length=3, max_length=35, pad_before=2, pad_after=2):
         output.append((max(0,a-pad_before),b+pad_after))
     return output
 
-def write_csv(path,spans,duration):
+def write_csv(path,spans,duration,scouting_team='Southside'):
     with open(path,'w',newline='') as f:
-        writer=csv.writer(f);writer.writerow(['clip','start_seconds','end_seconds','include','notes'])
-        for i,(a,b) in enumerate(spans,1):writer.writerow([f'play_{i:04d}',f'{a:.2f}',f'{min(duration,b):.2f}','yes','REVIEW: candidate, not verified play'])
+        writer=csv.writer(f);writer.writerow(['clip','start_seconds','end_seconds','include','odk','notes'])
+        for i,(a,b) in enumerate(spans,1):writer.writerow([f'play_{i:04d}',f'{a:.2f}',f'{min(duration,b):.2f}','yes','?',f'REVIEW: candidate, not verified play; scouting team: {scouting_team}'])
 
 def export(path,csv_path,out):
     out.mkdir(parents=True,exist_ok=True)
